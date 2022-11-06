@@ -1,6 +1,6 @@
 blueprint:
   domain: automation
-  name: styrbar_light_prod
+  name: styrbar_light
   input:
     remote_id:
       name: (Required) Remote
