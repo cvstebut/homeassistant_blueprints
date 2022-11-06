@@ -1,0 +1,98 @@
+blueprint:
+  domain: automation
+  name: styrbar_light_prod
+  input:
+    remote_id:
+      name: (Required) Remote
+      description: The remote that triggers this automation
+      selector:
+        device:
+          model: "STYRBAR remote control (E2001/E2002)"
+    target_light:
+      name: Light
+      description: The light(s) or light group to control
+      selector:
+        entity:
+          domain: light
+    brightness_min:
+      name: (Optional) Minimum Brightness"
+      description: minimum brightness before ligth is off
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 255
+          step: 1
+          unit_of_measurement: brightness
+          mode: slider
+    brightness_max:
+      name: (Optional) Maximum brightness"
+      description: maximum brightness that the automation can set the targeted light"
+      default: 255
+      selector:
+        number:
+          min: 2
+          max: 255
+          step: 1
+          unit_of_measurement: brightness
+          mode: slider
+
+mode: single
+
+trigger:
+  platform: mqtt
+  topic: '{{ "zigbee2mqtt/+/action" }}'
+
+condition: []
+
+action:
+  - variables:
+      action: "{{ trigger.payload }}"
+      remote_id: !input remote_id
+      target: !input target_light
+      ct_step_size: 15
+      brightness_step_size: 8
+      brightness_min: !input brightness_min
+      brightness_max: !input brightness_max
+      device_name: '{{ trigger.topic.split("/")[1] }}'
+      topic_name: '{{ device_attr(remote_id, "name") }}'
+  - choose:
+      - conditions: '{{ action == "brightness_move_up" and device_name == topic_name }}'
+        sequence:
+          - service: light.turn_on
+            data:
+              entity_id: !input target_light
+      - conditions: '{{ action == "brightness_move_down" and device_name == topic_name }}'
+        sequence:
+          - service: light.turn_off
+            data:
+              entity_id: !input target_light
+      - conditions: '{{ action == "arrow_right_click" and device_name == topic_name }}'
+        sequence:
+          - service: light.turn_on
+            data:
+              entity_id: !input target_light
+              color_temp: '{{ [state_attr(target, "color_temp") + ct_step_size, state_attr(target, "max_mireds")] | min }}'
+      - conditions: '{{ action == "arrow_left_click" and device_name == topic_name }}'
+        sequence:
+          - service: light.turn_on
+            data:
+              entity_id: !input target_light
+              color_temp: '{{ [state_attr(target, "color_temp") - ct_step_size, state_attr(target, "min_mireds")] | max }}'
+      - conditions: '{{ action == "on" and is_state(target, "off") and device_name == topic_name }}'
+        sequence:
+          - service: light.turn_on
+            data:
+              entity_id: !input target_light
+      - conditions: '{{ action == "on" and device_name == topic_name }}'
+        sequence:
+          - service: light.turn_on
+            data:
+              entity_id: !input target_light
+              brightness: '{{ [state_attr(target, "brightness") + brightness_step_size, brightness_max] | min }}'
+      - conditions: '{{ action == "off" and device_name == topic_name }}'
+        sequence:
+          - service: light.turn_on
+            data:
+              entity_id: !input target_light
+              brightness: '{{ [state_attr(target, "brightness") - brightness_step_size, brightness_min] | max }}'
